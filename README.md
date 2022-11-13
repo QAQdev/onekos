@@ -1,2 +1,2 @@
 # onekos
-A mini kernel of ZJU OS
+A mini kernel of ZJU OS, built from scratch.
