@@ -37,9 +37,8 @@
 
 #define PA2VA_OFFSET (VM_START - PHY_START)
 
-#define PAGE_TABLE_ENTRIES 512
-#define LEVELS 3
-#define PTESIZE 0x10000
+#define USER_START (0x0000000000000000) // user space start virtual address
+#define USER_END (0x0000004000000000)   // user space end virtual address
 
 #define ADD_PTE(pa, flags) (((pa >> 12) << 10) | (flags))
 

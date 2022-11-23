@@ -15,6 +15,7 @@ CFLAG = ${CF} ${INCLUDE} -DPRIORITY
 
 .PHONY:all run debug clean
 all:
+	${MAKE} -C user all
 	${MAKE} -C lib all
 	${MAKE} -C init all
 	${MAKE} -C arch/riscv all
