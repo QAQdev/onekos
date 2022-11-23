@@ -30,6 +30,7 @@ debug: all
 	@qemu-system-riscv64 -nographic -machine virt -kernel vmlinux -bios default -S -s
 
 clean:
+	${MAKE} -C user clean
 	${MAKE} -C lib clean
 	${MAKE} -C init clean
 	${MAKE} -C arch/riscv clean
