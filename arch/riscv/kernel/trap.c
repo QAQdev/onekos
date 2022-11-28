@@ -2,8 +2,34 @@
 #include "printk.h"
 #include "clock.h"
 #include "proc.h"
+#include "syscall.h"
 
-void trap_handler(unsigned long scause, unsigned long sepc)
+void u_mode_call_handler(struct pt_regs *regs)
+{
+
+    uint64 *a0 = &regs->x[10];
+    uint64 a1 = regs->x[11];
+    uint64 a2 = regs->x[12];
+    uint64 a7 = regs->x[17];
+
+    // printk("%d\n",a7);
+
+    switch (a7)
+    {
+    case SYS_WRITE:
+        sys_write(*a0, a1, a2);
+        break;
+    case SYS_GETPID:
+        *a0 = sys_getpid();
+        break;
+    default:
+        break;
+    }
+
+    regs->sepc += (uint64)0x4; // set pc to next instruction
+}
+
+void trap_handler(unsigned long scause, unsigned long sepc, struct pt_regs *regs)
 {
     // 通过 `scause` 判断trap类型
     // 如果是 interrupt 判断是否是 timer interrupt
@@ -18,46 +44,59 @@ void trap_handler(unsigned long scause, unsigned long sepc)
         clock_set_next_event();
         do_timer();
         break;
-    case 0x0:
+    case 0:
         printk("Instruction address misaligned\n");
         break;
-    case 0x1:
+    case 1:
         printk("Instruction access fault\n");
         break;
-    case 0x3:
+    case 3:
         printk("Breakpoint\n");
         break;
-    case 0x4:
+    case 4:
         printk("Load address misaligned\n");
         break;
-    case 0x5:
+    case 5:
         printk("Load access fault\n");
         break;
-    case 0x6:
+    case 6:
         printk("Store/AMO address misaligned\n");
         break;
-    case 0x7:
+    case 7:
         printk("Store/AMO access fault\n");
         break;
-    case 0x8:
-        printk("Environment call from U-mode\n");
+    case 8:
+        // printk("Environment call from U-mode\n");
+        u_mode_call_handler(regs);
         break;
-    case 0x9:
+    case 9:
         printk("Environment call from S-mode\n");
         break;
-    case 0x11:
+    case 11:
         printk("Environment call from M-mode\n");
         break;
-    case 0x12:
+    case 12:
         printk("Instruction page fault\n");
+        while (1)
+            ;
         break;
-    case 0x13:
+    case 13:
         printk("Load page fault\n");
+        while (1)
+            ;
         break;
-    case 0x15:
+    case 15:
         printk("Store/AMO page fault\n");
+        while (1)
+            ;
         break;
     default:
+        // printk("Unhandled exception\n");
+        // while (1)
+        // {
+        //     /* code */
+        // }
+
         break;
     }
 }

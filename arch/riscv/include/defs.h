@@ -40,6 +40,8 @@
 #define USER_START (0x0000000000000000) // user space start virtual address
 #define USER_END (0x0000004000000000)   // user space end virtual address
 
+// self defines
+#define PGTBL_ENTRIES (PGSIZE / sizeof(unsigned long long))
 #define ADD_PTE(pa, flags) (((pa >> 12) << 10) | (flags))
 
 #endif

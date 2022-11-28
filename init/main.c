@@ -7,7 +7,7 @@ extern void test();
 
 int start_kernel()
 {
-    printk("\x1b[0;36m2022 Hello RISCV!\x1b[0;37m\n");
+    printk("\x1b[0;36m[S-Mode] 2022 Hello RISCV!\x1b[0;37m\n");
 
     // TEST ONLY (in lab3)
     // get the size of members in `task_struct`
@@ -28,6 +28,8 @@ int start_kernel()
     // csr_write(sscratch, 114514);
     // puti(csr_read(sscratch));
     // puts("\n");
+
+    schedule();
 
     test(); // DO NOT DELETE !!!
 

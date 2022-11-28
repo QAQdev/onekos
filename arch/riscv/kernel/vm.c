@@ -25,7 +25,7 @@ void setup_vm(void)
     // linear mapping
     early_pgtbl[(VM_START >> 30) & 0x1FF] = ADD_PTE(PHY_START, 0xf);
 
-    printk("[DEBUG]setup_vm done\n");
+    // printk("[DEBUG]setup_vm done\n");
 }
 
 /* swapper_pg_dir: kernel pagetable 根目录， 在 setup_vm_final 进行映射。 */
@@ -114,32 +114,32 @@ void setup_vm_final(void)
     // permission: XWRV -> b'1011
     create_mapping(swapper_pg_dir, (uint64)_stext, PHY_START + OPENSBI_SIZE,
                    _srodata - _skernel, 0b101);
-    printk("[DEBUG].text section mapped\n");
+    // printk("[DEBUG].text section mapped\n");
 
     // mapping kernel rodata -|-|R|V
     create_mapping(swapper_pg_dir, (uint64)_srodata,
                    PHY_START + OPENSBI_SIZE + _srodata - _skernel,
                    _sdata - _srodata, 0b001);
-    printk("[DEBUG].rodata section mapped\n");
+    // printk("[DEBUG].rodata section mapped\n");
 
     // mapping other memory -|W|R|V
     create_mapping(swapper_pg_dir, (uint64)_sdata,
                    (uint64)_sdata - PA2VA_OFFSET,
                    PHY_END + PA2VA_OFFSET - (uint64)_sdata,
                    0b011);
-    printk("[DEBUG]other section mapped\n");
+    // printk("[DEBUG]other section mapped\n");
 
     // set satp with swapper_pg_dir
     // physical page number, so need to minus PA2VA_OFFSET
     uint64 ppn = ((uint64)swapper_pg_dir - PA2VA_OFFSET) >> 12; // get PPN of `swapper_pg_dir`
 
-    printk("[DEBUG]swapper_pg_dir PPN: %lx\n", ppn);
+    // printk("[DEBUG]swapper_pg_dir PPN: %lx\n", ppn);
 
     csr_write(satp, ((uint64)0x000fffffffffff & ppn) | (uint64)0x8000000000000000); // set MODE to Sv39
-    printk("[DEBUG]satp: %lx\n", csr_read(satp));
-    printk("[DEBUG]scause: %lx\n", csr_read(scause));
+    // printk("[DEBUG]satp: %lx\n", csr_read(satp));
+    // printk("[DEBUG]scause: %lx\n", csr_read(scause));
     // flush TLB
     asm volatile("sfence.vma zero, zero");
-
+    asm volatile("fence.i");
     return;
 }

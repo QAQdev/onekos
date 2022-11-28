@@ -1,15 +1,25 @@
     .section .text.entry
     .align 2
-    .extern dummy
+    # .extern dummy
     .globl _traps
 _traps:
+
+    # lab5: when `sscratch` is 0, we are in kernel mode
+    # and should not swap `sscratch` and `sp`
+    csrr t0, sscratch
+    beqz t0, _traps_cont
+    csrrw sp, sscratch, sp
     # -----------
-
         # 1. save 32 registers and sepc to stack
-
-        addi sp, sp, -264
+_traps_cont:
+        addi sp, sp, -280
+        csrr t1, sscratch
+        sd t1, 272(sp)
+        csrr t1, sstatus
+        sd t1, 264(sp)
         csrr t1, sepc
         sd t1, 256(sp)
+
         sd x31, 248(sp)
         sd x30, 240(sp)
         sd x29, 232(sp)
@@ -50,12 +60,16 @@ _traps:
         # passing arguments
         csrr a0, scause
         csrr a1, sepc
+        mv a2, sp # pt_regs
         call trap_handler
 
     # -----------
 
         # 3. restore sepc and 32 registers (x2(sp) should be restore last) from stack
-
+        ld t1, 272(sp)
+        csrw sscratch, t1
+        ld t1, 264(sp)
+        csrw sstatus, t1
         ld t1, 256(sp)
         csrw sepc, t1
         ld x31, 248(sp)
@@ -90,10 +104,14 @@ _traps:
         ld x2, 16(sp)
         ld x1, 8(sp)
 
-        addi sp, sp, 264
+        addi sp, sp, 280
+
+        csrr t0, sscratch
+        beqz t0, _traps_end
+        csrrw sp, sscratch, sp # swap 
 
     # -----------
-
+_traps_end:
         # 4. return from trap
         
         sret
@@ -102,8 +120,10 @@ _traps:
     .global __dummy
 __dummy:
 
+    
+    csrrw sp, sscratch, sp # lab5: swap the value of sp and sscratch
     # lab3: set sepc to address of `dummy()`
-    la t0, dummy
+    la t0, 0
     csrw sepc, t0
     sret 
 
@@ -131,6 +151,25 @@ __switch_to:
     sd s10, 136(a0)
     sd s11, 144(a0)
 
+    # store sepc, sstatus, sscratch
+    csrr t0, sepc
+    sd t0, 152(a0)
+    csrr t0, sstatus
+    sd t0, 160(a0)
+    csrr t0, sscratch
+    sd t0, 168(a0)
+
+    # switch page table
+
+    ld t0, 176(a1) # pgd
+    srli t0, t0, 12
+    li t1, 0x8000000000000000 # MODE:Sv39(8) ASID: 0 PPN: PPN of early_pgtbl
+    or t2, t0, t1
+    csrw satp, t2
+    
+    sfence.vma zero, zero
+    fence.i
+
     # restore state from next process
     # `a1` is the next thread to be executed
     
@@ -148,5 +187,13 @@ __switch_to:
     ld s9, 128(a1)
     ld s10, 136(a1)
     ld s11, 144(a1)
+
+    # restore sepc, sstatus, sscratch
+    ld t0, 152(a1)
+    csrw sepc, t0
+    ld t0, 160(a1)
+    csrw sstatus, t0
+    ld t0, 168(a1)
+    csrw sscratch, t0
 
     ret

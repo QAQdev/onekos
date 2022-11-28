@@ -48,8 +48,9 @@ _start:
     mv a6, x0
     ecall
     
-    li t1, 2
-    csrs sstatus, t1 # lab2: set sstatus[SIE] = 1 
+    # not used in lab5
+    # li t1, 2
+    # csrs sstatus, t1 # lab2: set sstatus[SIE] = 1 
 
     call start_kernel # lab1: call `start_kernel`
 
@@ -82,6 +83,9 @@ relocate:
     
     # flush tlb
     sfence.vma zero, zero
+
+    # flush icache
+    fence.i
 
     ret
 

@@ -1,8 +1,9 @@
 // arch/riscv/include/proc.h
 
 #include "types.h"
+#include "stdint.h"
 
-#define NR_TASKS (1 + 3) // 用于控制最大线程数量 （idle 线程 + 31 内核线程）
+#define NR_TASKS (1 + 4) // 用于控制最大线程数量 （idle 线程 + 31 内核线程）
 
 #define TASK_RUNNING 0 // 为了简化实验, 所有的线程都只有一种状态
 
@@ -18,23 +19,38 @@ struct thread_info
 };
 
 /* 线程状态段数据结构 */
+typedef unsigned long long *pagetable_t;
+
 struct thread_struct
 {
-    uint64 ra;
-    uint64 sp;
-    uint64 s[12];
+    uint64_t ra;
+    uint64_t sp;
+    uint64_t s[12];
+
+    uint64_t sepc, sstatus, sscratch;
 };
 
 /* 线程数据结构 */
 struct task_struct
 {
     struct thread_info *thread_info;
-    uint64 state;    // 线程状态
-    uint64 counter;  // 运行剩余时间
-    uint64 priority; // 运行优先级 1最低 10最高
-    uint64 pid;      // 线程id
+    uint64_t state;
+    uint64_t counter;
+    uint64_t priority;
+    uint64_t pid;
 
     struct thread_struct thread;
+
+    pagetable_t pgd;
+};
+
+// add in lab5
+struct pt_regs
+{
+    uint64_t x[32];
+    uint64_t sepc;
+    uint64_t sstatus;
+    uint64_t sscratch;
 };
 
 /* 线程初始化 创建 NR_TASKS 个线程 */
