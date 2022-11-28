@@ -1,4 +1,4 @@
 .section .uapp
 
-.incbin "uapp.bin"
-# .incbin "uapp"
+# .incbin "uapp.bin"
+.incbin "uapp"

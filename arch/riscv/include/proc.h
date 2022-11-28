@@ -33,7 +33,8 @@ struct thread_struct
 /* 线程数据结构 */
 struct task_struct
 {
-    struct thread_info *thread_info;
+    struct thread_info thread_info; // change to struct not struct* to avoid wierd ptr,
+                                    // thus need to modify __switch_to
     uint64_t state;
     uint64_t counter;
     uint64_t priority;

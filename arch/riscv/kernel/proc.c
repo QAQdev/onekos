@@ -17,8 +17,8 @@ struct task_struct *idle;           // idle process
 struct task_struct *current;        // 指向当前运行线程的 `task_struct`
 struct task_struct *task[NR_TASKS]; // 线程数组, 所有的线程都保存在此
 
-// used in lab5
-uint64 *setup_user_pgtbl()
+// add in lab5, but replaced by `load_program` to enable elf
+static uint64 *setup_user_pgtbl()
 {
     uint64 *u_pgtbl = (uint64 *)alloc_page();
 
@@ -29,7 +29,7 @@ uint64 *setup_user_pgtbl()
     }
 
     // number of pages needed to copy uapp
-    uint64 uapp_pages = PGROUNDUP((uint64)uapp_end - (uint64)uapp_start);
+    uint64 uapp_pages = PGROUNDUP((uint64)uapp_end - (uint64)uapp_start) / PGSIZE;
     uint64 uapp_start_cpy = alloc_pages(uapp_pages);
     uint64 uapp_span = (uint64)uapp_end - (uint64)uapp_start;
 
@@ -55,13 +55,6 @@ uint64 *setup_user_pgtbl()
 
 static uint64_t load_program(struct task_struct *task)
 {
-    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)uapp_start;
-
-    uint64_t phdr_start = (uint64_t)ehdr + ehdr->e_phoff;
-    int phdr_cnt = ehdr->e_phnum;
-
-    Elf64_Phdr *phdr;
-    int load_phdr_cnt = 0;
 
     uint64 *u_pgtbl = (uint64 *)alloc_page();
     // user root page table contains every kernel root page table entry
@@ -70,17 +63,30 @@ static uint64_t load_program(struct task_struct *task)
         u_pgtbl[i] = swapper_pg_dir[i];
     }
 
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)uapp_start;
+
+    uint64_t phdr_start = (uint64_t)ehdr + ehdr->e_phoff;
+    int phdr_cnt = ehdr->e_phnum;
+
+    Elf64_Phdr *phdr;
+    int load_phdr_cnt = 0;
+
+    uint64 pa = USER_START;
     for (int i = 0; i < phdr_cnt; i++)
     {
         phdr = (Elf64_Phdr *)(phdr_start + sizeof(Elf64_Phdr) * i);
         if (phdr->p_type == PT_LOAD)
         {
-            // do mapping
+            // number of pages the segment need to have
+            uint64 uapp_pages = PGROUNDUP(phdr->p_memsz) / PGSIZE;
+            uint64 uapp_start_cpy = alloc_pages(uapp_pages);                      // allocate pages
+            uint64 load_addr = (uint64)uapp_start + phdr->p_offset;               // find load address
+            memcpy((uint64 *)uapp_start_cpy, (uint64 *)load_addr, phdr->p_memsz); // do copys
             create_mapping(u_pgtbl,
-                           phdr->p_vaddr,
-                           phdr->p_paddr,
+                           USER_START,
+                           uapp_start_cpy - PA2VA_OFFSET,
                            phdr->p_memsz,
-                           0b1111);
+                           phdr->p_flags | 0b1000);
         }
     }
 
@@ -92,16 +98,9 @@ static uint64_t load_program(struct task_struct *task)
                    PGSIZE,
                    0b1011);
 
-    // // map user space
-    create_mapping(u_pgtbl,
-                   USER_START,
-                   (uint64)uapp_start - PA2VA_OFFSET,
-                   (uint64)uapp_end - (uint64)uapp_start,
-                   0b1111);
-
     // following code has been written for you
     // set user stack
-    task->thread_info->user_sp = USER_END;
+    // task->thread_info->user_sp = USER_END;
     // pc for the user program
     task->thread.sepc = ehdr->e_entry;
     // sstatus bits set
@@ -110,6 +109,8 @@ static uint64_t load_program(struct task_struct *task)
     task->thread.sstatus |= 0x00040020; // set SPIE and SUM
     // user stack for user program
     task->thread.sscratch = USER_END;
+
+    printk("!\n");
 
     return (uint64)u_pgtbl;
 }
@@ -148,18 +149,20 @@ void task_init()
 
         /* add in lab5 */
         // create user page table
-        task[i]->pgd = (uint64 *)((uint64)setup_user_pgtbl() - PA2VA_OFFSET); // 这个很逆天。。。。。。指针+数字类似下标访问
+        // task[i]->pgd = (uint64 *)((uint64)setup_user_pgtbl() - PA2VA_OFFSET); // 这个很逆天。。。。。。指针+数字类似下标访问
 
-        // printk("%lx\n",task[i]->pgd);
+        // // printk("%lx\n",task[i]->pgd);
 
-        task[i]->thread.sepc = USER_START;
+        // task[i]->thread.sepc = USER_START;
 
-        task[i]->thread.sstatus = csr_read(sstatus);
-        // SUM: 18, SPP: 8, SPIE: 5
-        task[i]->thread.sstatus |= 0x00040020; // set SPIE and SUM
-        task[i]->thread.sscratch = USER_END;   // set sscratch
+        // task[i]->thread.sstatus = csr_read(sstatus);
+        // // SUM: 18, SPP: 8, SPIE: 5
+        // task[i]->thread.sstatus |= 0x00040020; // set SPIE and SUM
+        // task[i]->thread.sscratch = USER_END;   // set sscratch
 
-        // task[i]->pgd = (uint64 *)(load_program(task[i]) - PA2VA_OFFSET);
+        printk("load_program begins\n");
+
+        task[i]->pgd = (uint64 *)(load_program(task[i]) - PA2VA_OFFSET);
     }
 
     printk("...proc_init done!\n");
