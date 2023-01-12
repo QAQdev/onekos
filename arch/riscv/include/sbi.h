@@ -1,5 +1,7 @@
 #ifndef _SBI_H
 #define _SBI_H
+#pragma once
+
 
 #define SBI_PUTCHAR 0x1
 

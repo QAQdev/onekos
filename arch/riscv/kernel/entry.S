@@ -9,122 +9,114 @@ _traps:
     csrr t0, sscratch
     beqz t0, _traps_cont
     csrrw sp, sscratch, sp
-    # -----------
-        # 1. save 32 registers and sepc to stack
+
 _traps_cont:
-        addi sp, sp, -280
-        csrr t1, sscratch
-        sd t1, 272(sp)
-        csrr t1, sstatus
-        sd t1, 264(sp)
-        csrr t1, sepc
-        sd t1, 256(sp)
+    # 1. save 32 registers and sepc to stack
 
-        sd x31, 248(sp)
-        sd x30, 240(sp)
-        sd x29, 232(sp)
-        sd x28, 224(sp)
-        sd x27, 216(sp)
-        sd x26, 208(sp)
-        sd x25, 200(sp)
-        sd x24, 192(sp)
-        sd x23, 184(sp)
-        sd x22, 176(sp)
-        sd x21, 168(sp)
-        sd x20, 160(sp)
-        sd x19, 152(sp)
-        sd x18, 144(sp)
-        sd x17, 136(sp)
-        sd x16, 128(sp)
-        sd x15, 120(sp)
-        sd x14, 112(sp)
-        sd x13, 104(sp)
-        sd x12, 96(sp)
-        sd x11, 88(sp)
-        sd x10, 80(sp)
-        sd x9, 72(sp)
-        sd x8, 64(sp)
-        sd x7, 56(sp)
-        sd x6, 48(sp)
-        sd x5, 40(sp)
-        sd x4, 32(sp)
-        sd x3, 24(sp)
-        sd x2, 16(sp)
-        sd x1, 8(sp)      
-        sd x0, 0(sp) 
+    addi sp, sp, -280
+    csrr t1, sscratch
+    sd t1, 272(sp)
+    csrr t1, sstatus
+    sd t1, 264(sp)
+    csrr t1, sepc
+    sd t1, 256(sp)
 
-    # -----------
+    sd x31, 248(sp)
+    sd x30, 240(sp)
+    sd x29, 232(sp)
+    sd x28, 224(sp)
+    sd x27, 216(sp)
+    sd x26, 208(sp)
+    sd x25, 200(sp)
+    sd x24, 192(sp)
+    sd x23, 184(sp)
+    sd x22, 176(sp)
+    sd x21, 168(sp)
+    sd x20, 160(sp)
+    sd x19, 152(sp)
+    sd x18, 144(sp)
+    sd x17, 136(sp)
+    sd x16, 128(sp)
+    sd x15, 120(sp)
+    sd x14, 112(sp)
+    sd x13, 104(sp)
+    sd x12, 96(sp)
+    sd x11, 88(sp)
+    sd x10, 80(sp)
+    sd x9, 72(sp)
+    sd x8, 64(sp)
+    sd x7, 56(sp)
+    sd x6, 48(sp)
+    sd x5, 40(sp)
+    sd x4, 32(sp)
+    sd x3, 24(sp)
+    sd x2, 16(sp)
+    sd x1, 8(sp)      
+    sd x0, 0(sp)
 
-        # 2. call trap_handler
+    # 2. call trap_handler
 
-        # passing arguments
-        csrr a0, scause
-        csrr a1, sepc
-        mv a2, sp # pt_regs
-        call trap_handler
+    # passing arguments
+    csrr a0, scause
+    csrr a1, sepc
+    mv a2, sp # pt_regs
+    call trap_handler
+    .global __ret_from_fork
+__ret_from_fork:
+    # 3. restore sepc and 32 registers (x2(sp) should be restore last) from stack
+    ld t1, 272(sp)
+    csrw sscratch, t1
+    ld t1, 264(sp)
+    csrw sstatus, t1
+    ld t1, 256(sp)
+    csrw sepc, t1
+    ld x31, 248(sp)
+    ld x30, 240(sp)
+    ld x29, 232(sp)
+    ld x28, 224(sp)
+    ld x27, 216(sp)
+    ld x26, 208(sp)
+    ld x25, 200(sp)
+    ld x24, 192(sp)
+    ld x23, 184(sp)
+    ld x22, 176(sp)
+    ld x21, 168(sp)
+    ld x20, 160(sp)
+    ld x19, 152(sp)
+    ld x18, 144(sp)
+    ld x17, 136(sp)
+    ld x16, 128(sp)
+    ld x15, 120(sp)
+    ld x14, 112(sp)
+    ld x13, 104(sp)
+    ld x12, 96(sp)
+    ld x11, 88(sp)
+    ld x10, 80(sp)
+    ld x9, 72(sp)
+    ld x8, 64(sp)
+    ld x7, 56(sp)
+    ld x6, 48(sp)
+    ld x5, 40(sp)
+    ld x4, 32(sp)
+    ld x3, 24(sp)
+    ld x2, 16(sp)
+    ld x1, 8(sp)
 
-    # -----------
+    addi sp, sp, 280
 
-        # 3. restore sepc and 32 registers (x2(sp) should be restore last) from stack
-        ld t1, 272(sp)
-        csrw sscratch, t1
-        ld t1, 264(sp)
-        csrw sstatus, t1
-        ld t1, 256(sp)
-        csrw sepc, t1
-        ld x31, 248(sp)
-        ld x30, 240(sp)
-        ld x29, 232(sp)
-        ld x28, 224(sp)
-        ld x27, 216(sp)
-        ld x26, 208(sp)
-        ld x25, 200(sp)
-        ld x24, 192(sp)
-        ld x23, 184(sp)
-        ld x22, 176(sp)
-        ld x21, 168(sp)
-        ld x20, 160(sp)
-        ld x19, 152(sp)
-        ld x18, 144(sp)
-        ld x17, 136(sp)
-        ld x16, 128(sp)
-        ld x15, 120(sp)
-        ld x14, 112(sp)
-        ld x13, 104(sp)
-        ld x12, 96(sp)
-        ld x11, 88(sp)
-        ld x10, 80(sp)
-        ld x9, 72(sp)
-        ld x8, 64(sp)
-        ld x7, 56(sp)
-        ld x6, 48(sp)
-        ld x5, 40(sp)
-        ld x4, 32(sp)
-        ld x3, 24(sp)
-        ld x2, 16(sp)
-        ld x1, 8(sp)
+    csrr t0, sscratch
+    beqz t0, _traps_end
+    csrrw sp, sscratch, sp # swap 
 
-        addi sp, sp, 280
-
-        csrr t0, sscratch
-        beqz t0, _traps_end
-        csrrw sp, sscratch, sp # swap 
-
-    # -----------
 _traps_end:
-        # 4. return from trap
+    # 4. return from trap
         
-        sret
+    sret
 
-    # -----------
     .global __dummy
 __dummy:
 
-    
     csrrw sp, sscratch, sp # lab5: swap the value of sp and sscratch
-    # lab3: set sepc to address of `dummy()`
-    la t0, 0
-    csrw sepc, t0
     sret 
 
     .globl __switch_to
@@ -135,21 +127,6 @@ __switch_to:
     # in our design, it's 6*8 = 48
     # notice the order cannot be changed
     # `a0` is the previous thread
-
-    # sd ra, 40(a0)
-    # sd sp, 48(a0)
-    # sd s0, 56(a0)
-    # sd s1, 64(a0)
-    # sd s2, 72(a0)
-    # sd s3, 80(a0)
-    # sd s4, 88(a0)
-    # sd s5, 96(a0)
-    # sd s6, 104(a0)
-    # sd s7, 112(a0)
-    # sd s8, 120(a0)
-    # sd s9, 128(a0)
-    # sd s10, 136(a0)
-    # sd s11, 144(a0)
 
     sd ra, 48(a0)
     sd sp, 56(a0)
@@ -175,7 +152,6 @@ __switch_to:
     sd t0, 176(a0)
 
     # switch page table
-
     ld t0, 184(a1) # pgd
     srli t0, t0, 12
     li t1, 0x8000000000000000 # MODE:Sv39(8) ASID: 0 PPN: PPN of early_pgtbl

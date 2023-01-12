@@ -29,6 +29,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifndef _ELF_H
 #define _ELF_H
+#pragma once
+
 
 #include "stdint.h"
 

@@ -1,18 +1,23 @@
 // trap.c
 #include "printk.h"
 #include "clock.h"
+#include "defs.h"
 #include "proc.h"
+#include "mm.h"
 #include "syscall.h"
+#include "string.h"
 
-void u_mode_call_handler(struct pt_regs *regs)
+extern struct task_struct *current;
+extern void create_mapping(uint64 *pgtbl, uint64 va, uint64 pa, uint64 sz, int perm);
+extern void uapp_start(), uapp_end();
+
+static void u_mode_call_handler(struct pt_regs *regs)
 {
 
     uint64 *a0 = &regs->x[10];
     uint64 a1 = regs->x[11];
     uint64 a2 = regs->x[12];
     uint64 a7 = regs->x[17];
-
-    // printk("%d\n",a7);
 
     switch (a7)
     {
@@ -22,11 +27,62 @@ void u_mode_call_handler(struct pt_regs *regs)
     case SYS_GETPID:
         *a0 = sys_getpid();
         break;
+    case SYS_CLONE:
+        *a0 = sys_clone(regs);
+        break;
     default:
         break;
     }
 
     regs->sepc += (uint64)0x4; // set pc to next instruction
+}
+
+// add in lab6
+void do_page_fault(struct pt_regs *regs)
+{
+    /*
+     1. 通过 stval 获得访问出错的虚拟内存地址（Bad Address）
+     2. 通过 find_vma() 查找 Bad Address 是否在某个 vma 中
+     3. 分配一个页，将这个页映射到对应的用户地址空间
+     4. 通过 (vma->vm_flags | VM_ANONYM) 获得当前的 VMA 是否是匿名空间
+     5. 根据 VMA 匿名与否决定将新的页清零或是拷贝 uapp 中的内容
+    */
+    printk("[S] Supervisor Page Fault, scause: %lx, stval: %lx, sepc: %lx\n", csr_read(scause), csr_read(stval), csr_read(sepc));
+
+    uint64_t bad_addr = csr_read(stval);
+    struct vm_area_struct *p_vma = find_vma(current, bad_addr);
+
+    if (p_vma != NULL)
+    {
+        uint64_t page = alloc_page();
+
+        if (!(p_vma->vm_flags & VM_ANONYM)) // not anonymous, need to copy
+        {
+            uint64_t load_addr = (uint64_t)uapp_start + p_vma->vm_content_offset_in_file;
+            // within single page
+            if (bad_addr - p_vma->vm_start < PGSIZE)
+            {
+                uint64_t ofs = bad_addr - PGROUNDDOWN(bad_addr);
+                uint64_t size = PGSIZE - ofs < p_vma->vm_end - p_vma->vm_start ? PGSIZE - ofs : p_vma->vm_end - p_vma->vm_start;
+                memcpy((void *)(page + ofs), (void *)load_addr, size);
+            }
+            // over single page
+            else
+            {
+                uint64_t size = PGSIZE < p_vma->vm_end - bad_addr ? PGSIZE : p_vma->vm_end - bad_addr;
+                memcpy((void *)page, (void *)(load_addr + bad_addr - p_vma->vm_start), size);
+            }
+        }
+
+        // do mapping
+        create_mapping(((uint64_t *)((uint64_t)current->pgd + PA2VA_OFFSET)),
+                       PGROUNDDOWN(bad_addr),
+                       page - PA2VA_OFFSET,
+                       PGSIZE,
+                       (p_vma->vm_flags) | 0b10001);
+
+        p_vma->alloc_flag = 1;
+    }
 }
 
 void trap_handler(unsigned long scause, unsigned long sepc, struct pt_regs *regs)
@@ -76,26 +132,27 @@ void trap_handler(unsigned long scause, unsigned long sepc, struct pt_regs *regs
         printk("Environment call from M-mode\n");
         break;
     case 12:
-        printk("Instruction page fault\n");
-        while (1)
-            ;
+        // printk("Instruction page fault\n");
+        do_page_fault(regs);
+        // while (1)
+        //     ;
         break;
     case 13:
-        printk("Load page fault\n");
-        while (1)
-            ;
+        // printk("Load page fault\n");
+        do_page_fault(regs);
+        // while (1)
+        //     ;
         break;
     case 15:
-        printk("Store/AMO page fault\n");
-        while (1)
-            ;
+        // printk("Store/AMO page fault\n");
+        do_page_fault(regs);
+        // while (1)
+        //     ;
         break;
     default:
-        // printk("Unhandled exception\n");
-        // while (1)
-        // {
-        //     /* code */
-        // }
+        printk("Unhandled exception\n");
+        while (1)
+            ;
 
         break;
     }

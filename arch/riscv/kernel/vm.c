@@ -95,8 +95,8 @@ void create_mapping(uint64 *pgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
             cur_ptes = (uint64 *)(((*cur_pte >> 10) << 12) + PA2VA_OFFSET);
             // printk("[DEBUG]valid-leaf pgtbl: cur_pte: %lx, *cur_pte: %lx", cur_pte, *cur_pte);
         }
-        // leaf page table, RWXV -> perm << 1 | 1
-        cur_ptes[vpn0] = ADD_PTE(cur_pa, (perm << 1) | 1);
+        // leaf page table, RWXV -> perm
+        cur_ptes[vpn0] = ADD_PTE(cur_pa, perm);
         // printk("[DEBUG]leaf pgtbl: cur_pte: %lx, *cur_pte: %lx", cur_pte, *cur_pte);
     }
 }
@@ -113,20 +113,20 @@ void setup_vm_final(void)
     // mapping kernel text X|-|R|V
     // permission: XWRV -> b'1011
     create_mapping(swapper_pg_dir, (uint64)_stext, PHY_START + OPENSBI_SIZE,
-                   _srodata - _skernel, 0b101);
+                   _srodata - _skernel, 0b1011);
     // printk("[DEBUG].text section mapped\n");
 
     // mapping kernel rodata -|-|R|V
     create_mapping(swapper_pg_dir, (uint64)_srodata,
                    PHY_START + OPENSBI_SIZE + _srodata - _skernel,
-                   _sdata - _srodata, 0b001);
+                   _sdata - _srodata, 0b0011);
     // printk("[DEBUG].rodata section mapped\n");
 
     // mapping other memory -|W|R|V
     create_mapping(swapper_pg_dir, (uint64)_sdata,
                    (uint64)_sdata - PA2VA_OFFSET,
                    PHY_END + PA2VA_OFFSET - (uint64)_sdata,
-                   0b011);
+                   0b0111);
     // printk("[DEBUG]other section mapped\n");
 
     // set satp with swapper_pg_dir

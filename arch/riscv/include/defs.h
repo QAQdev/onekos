@@ -1,6 +1,9 @@
 #ifndef _DEFS_H
 #define _DEFS_H
 
+#pragma once
+
+
 #define csr_read(csr)                     \
     ({                                    \
         register unsigned long long __v;  \

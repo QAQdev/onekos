@@ -77,30 +77,26 @@ static uint64_t load_program(struct task_struct *task)
         phdr = (Elf64_Phdr *)(phdr_start + sizeof(Elf64_Phdr) * i);
         if (phdr->p_type == PT_LOAD)
         {
-            // number of pages the segment need to have
-            uint64 uapp_pages = PGROUNDUP(phdr->p_memsz) / PGSIZE;
-            uint64 uapp_start_cpy = alloc_pages(uapp_pages);                      // allocate pages
-            uint64 load_addr = (uint64)uapp_start + phdr->p_offset;               // find load address
-            memcpy((uint64 *)uapp_start_cpy, (uint64 *)load_addr, phdr->p_memsz); // do copys
-            create_mapping(u_pgtbl,
-                           USER_START,
-                           uapp_start_cpy - PA2VA_OFFSET,
-                           phdr->p_memsz,
-                           phdr->p_flags | 0b1000);
+            uint64_t pages = ((phdr->p_vaddr - PGROUNDDOWN(phdr->p_vaddr)) + phdr->p_memsz - 1) / PGSIZE + 1;
+            do_mmap(
+                task,
+                phdr->p_vaddr,
+                pages * PGSIZE,
+                phdr->p_flags << 1 | VM_X_MASK,
+                phdr->p_offset,
+                phdr->p_filesz);
         }
     }
 
-    // allocate user stack and do mapping
-    // map user stack
-    create_mapping(u_pgtbl,
-                   USER_END - PGSIZE,
-                   (uint64)alloc_page() - PA2VA_OFFSET, // user stack
-                   PGSIZE,
-                   0b1011);
+    do_mmap(
+        task,
+        USER_END - PGSIZE,
+        PGSIZE,
+        VM_R_MASK | VM_W_MASK | VM_ANONYM,
+        0,
+        0);
 
     // following code has been written for you
-    // set user stack
-    // task->thread_info->user_sp = USER_END;
     // pc for the user program
     task->thread.sepc = ehdr->e_entry;
     // sstatus bits set
@@ -110,9 +106,38 @@ static uint64_t load_program(struct task_struct *task)
     // user stack for user program
     task->thread.sscratch = USER_END;
 
-    printk("!\n");
-
     return (uint64)u_pgtbl;
+}
+
+// add in lab6
+void do_mmap(struct task_struct *task, uint64_t addr, uint64_t length, uint64_t flags,
+             uint64_t vm_content_offset_in_file, uint64_t vm_content_size_in_file)
+{
+    // code
+    struct vm_area_struct *vma = &(task->vmas[task->vma_cnt]);
+    task->vma_cnt++;
+
+    vma->vm_start = addr;
+    vma->vm_end = addr + length;
+    vma->vm_content_offset_in_file = vm_content_offset_in_file;
+    vma->vm_content_size_in_file = vm_content_size_in_file;
+    vma->vm_flags = flags;
+    vma->alloc_flag = 0;
+}
+
+// add in lab6
+struct vm_area_struct *find_vma(struct task_struct *task, uint64_t addr)
+{
+
+    for (uint64_t i = 0; i < task->vma_cnt; i++)
+    {
+        if (addr >= task->vmas[i].vm_start && addr < task->vmas[i].vm_end)
+        {
+            return &task->vmas[i];
+        }
+    }
+
+    return NULL;
 }
 
 void task_init()
@@ -129,41 +154,36 @@ void task_init()
     idle->pid = 0;
     current = task[0] = idle;
 
-    // 1. 参考 idle 的设置, 为 task[1] ~ task[NR_TASKS - 1] 进行初始化
-    // 2. 其中每个线程的 state 为 TASK_RUNNING, counter 为 0, priority 使用 rand() 来设置, pid 为该 线程在线程数组中的下标。
-    // 3. 为 task[1] ~ task[NR_TASKS - 1] 设置 `thread_struct` 中的 `ra` 和 `sp`,
-    // 4. 其中 `ra` 设置为 __dummy （见 4.3.2）的地址,  `sp` 设置为 该线程申请的物理页的高地址
+    // modified in lab6, only initialize 1 task
 
-    for (uint64 i = 1; i < NR_TASKS; i++)
-    {
-        task[i] = (struct task_struct *)kalloc();
-        task[i]->state = TASK_RUNNING;
-        task[i]->counter = 0;
-        task[i]->priority = rand();
-        task[i]->pid = i;
+    // for (int i = 1; i < NR_TASKS; i++)
+    // {
+    //     task[i] = (struct task_struct *)kalloc();
+    //     task[i]->state = TASK_RUNNING;
+    //     task[i]->counter = 0;
+    //     task[i]->priority = rand();
+    //     task[i]->pid = i;
 
-        // return address is set to _dummy
-        task[i]->thread.ra = (uint64)__dummy;
-        // stack pointer is set to high address
-        task[i]->thread.sp = (uint64)task[i] + PGSIZE;
+    //     // return address is set to _dummy
+    //     task[i]->thread.ra = (uint64)__dummy;
+    //     // stack pointer is set to high address
+    //     task[i]->thread.sp = (uint64)task[i] + PGSIZE;
+    //     // lab6
+    //     task[i]->pgd = (uint64 *)(load_program(task[i]) - PA2VA_OFFSET);
+    // }
 
-        /* add in lab5 */
-        // create user page table
-        // task[i]->pgd = (uint64 *)((uint64)setup_user_pgtbl() - PA2VA_OFFSET); // 这个很逆天。。。。。。指针+数字类似下标访问
+    task[1] = (struct task_struct *)kalloc();
+    task[1]->state = TASK_RUNNING;
+    task[1]->counter = 0;
+    task[1]->priority = rand();
+    task[1]->pid = 1;
 
-        // // printk("%lx\n",task[i]->pgd);
-
-        // task[i]->thread.sepc = USER_START;
-
-        // task[i]->thread.sstatus = csr_read(sstatus);
-        // // SUM: 18, SPP: 8, SPIE: 5
-        // task[i]->thread.sstatus |= 0x00040020; // set SPIE and SUM
-        // task[i]->thread.sscratch = USER_END;   // set sscratch
-
-        printk("load_program begins\n");
-
-        task[i]->pgd = (uint64 *)(load_program(task[i]) - PA2VA_OFFSET);
-    }
+    // return address is set to _dummy
+    task[1]->thread.ra = (uint64)__dummy;
+    // stack pointer is set to high address
+    task[1]->thread.sp = (uint64)task[1] + PGSIZE;
+    // lab6
+    task[1]->pgd = (uint64 *)(load_program(task[1]) - PA2VA_OFFSET);
 
     printk("...proc_init done!\n");
 }
@@ -233,7 +253,7 @@ void reallocate()
     int all_zero = 1;
     for (int i = 1; i < NR_TASKS; i++)
     {
-        if (task[i]->counter > 0)
+        if (task[i] != NULL && task[i]->counter > 0)
         {
             all_zero = 0;
             break;
@@ -242,13 +262,17 @@ void reallocate()
 
     if (all_zero == 1)
     {
-        printk("\x1b[0;33mall tasks' counter are 0, reallocate...\x1b[0;37m\n");
+        // printk("\x1b[0;33mall tasks' counter are 0, reallocate...\x1b[0;37m\n");
         for (int i = 1; i < NR_TASKS; i++)
         {
-            task[i]->counter = rand();
-            printk("SET [PID = %d PRIORITY = %d COUNTER = %d]\n", i, task[i]->priority, task[i]->counter);
+            if (task[i] == NULL)
+            {
+                continue;
+            }
+            task[i]->counter = rand() % 7 + 1;
+            printk("\x1b[0;33mSET [PID = %d PRIORITY = %d COUNTER = %d]\x1b[0;37m\n", i, task[i]->priority, task[i]->counter);
         }
-        printk("\x1b[0;33mreallocation done...\x1b[0;37m\n");
+        // printk("\x1b[0;33mreallocation done...\x1b[0;37m\n");
     }
 }
 
@@ -265,7 +289,7 @@ void schedule(void)
     // find the task has minimum running time
     for (int i = 1; i < NR_TASKS; i++)
     {
-        if (task[i]->state == TASK_RUNNING && task[i]->counter > 0 && task[i]->counter < min)
+        if (task[i] != NULL && task[i]->state == TASK_RUNNING && task[i]->counter > 0 && task[i]->counter < min)
         {
             next = task[i];
             min = task[i]->counter;
@@ -289,7 +313,7 @@ void schedule(void)
     // find the task has highest priority
     for (int i = 1; i < NR_TASKS; i++)
     {
-        if (task[i]->state == TASK_RUNNING && task[i]->counter > 0 && task[i]->priority >= max)
+        if (task[i] != NULL && task[i]->state == TASK_RUNNING && task[i]->counter > 0 && task[i]->priority >= max)
         {
             // when priority is same, choose the one having less run time
             if (task[i]->priority == max)

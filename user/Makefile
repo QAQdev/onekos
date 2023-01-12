@@ -20,7 +20,7 @@ uapp.bin: $(OBJ)
 	${OBJCOPY} uapp.elf -O binary uapp.bin
 
 clean:
-	$(shell rm *.o uapp.o uapp.elf uapp.bin 2>/dev/null)
+	$(shell rm *.o uapp.o uapp uapp.elf uapp.bin 2>/dev/null)
 
 uapp: $(OBJ)
 	${GCC} ${CFLAG} -o uapp ${OBJ}
