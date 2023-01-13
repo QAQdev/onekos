@@ -47,6 +47,7 @@ void do_page_fault(struct pt_regs *regs)
      4. 通过 (vma->vm_flags | VM_ANONYM) 获得当前的 VMA 是否是匿名空间
      5. 根据 VMA 匿名与否决定将新的页清零或是拷贝 uapp 中的内容
     */
+
     printk("[S] Supervisor Page Fault, scause: %lx, stval: %lx, sepc: %lx\n", csr_read(scause), csr_read(stval), csr_read(sepc));
 
     uint64_t bad_addr = csr_read(stval);
@@ -55,33 +56,42 @@ void do_page_fault(struct pt_regs *regs)
     if (p_vma != NULL)
     {
         uint64_t page = alloc_page();
+        p_vma->alloc_flag = 1;
 
         if (!(p_vma->vm_flags & VM_ANONYM)) // not anonymous, need to copy
         {
             uint64_t load_addr = (uint64_t)uapp_start + p_vma->vm_content_offset_in_file;
+            uint64_t load_size, ofs;
             // within single page
             if (bad_addr - p_vma->vm_start < PGSIZE)
             {
-                uint64_t ofs = bad_addr - PGROUNDDOWN(bad_addr);
-                uint64_t size = PGSIZE - ofs < p_vma->vm_end - p_vma->vm_start ? PGSIZE - ofs : p_vma->vm_end - p_vma->vm_start;
-                memcpy((void *)(page + ofs), (void *)load_addr, size);
+                ofs = bad_addr - PGROUNDDOWN(bad_addr);
+                load_size = PGSIZE - ofs < p_vma->vm_end - p_vma->vm_start ? PGSIZE - ofs : p_vma->vm_end - p_vma->vm_start;
+                memcpy((void *)(page + ofs), (void *)load_addr, load_size);
             }
             // over single page
             else
             {
-                uint64_t size = PGSIZE < p_vma->vm_end - bad_addr ? PGSIZE : p_vma->vm_end - bad_addr;
-                memcpy((void *)page, (void *)(load_addr + bad_addr - p_vma->vm_start), size);
+                ofs = bad_addr - p_vma->vm_start;
+                load_size = PGSIZE < p_vma->vm_end - bad_addr ? PGSIZE : p_vma->vm_end - bad_addr;
+                memcpy((void *)page, (void *)(load_addr + ofs), load_size);
             }
+            // do mapping
+            create_mapping(((uint64_t *)((uint64_t)current->pgd + PA2VA_OFFSET)),
+                           bad_addr,
+                           page - PA2VA_OFFSET,
+                           PGSIZE,
+                           (p_vma->vm_flags) | 0b10001);
         }
-
-        // do mapping
-        create_mapping(((uint64_t *)((uint64_t)current->pgd + PA2VA_OFFSET)),
-                       PGROUNDDOWN(bad_addr),
-                       page - PA2VA_OFFSET,
-                       PGSIZE,
-                       (p_vma->vm_flags) | 0b10001);
-
-        p_vma->alloc_flag = 1;
+        else
+        {
+            // do mapping
+            create_mapping(((uint64_t *)((uint64_t)current->pgd + PA2VA_OFFSET)),
+                           bad_addr,
+                           page - PA2VA_OFFSET,
+                           PGSIZE,
+                           (p_vma->vm_flags) | 0b10001);
+        }
     }
 }
 
@@ -122,7 +132,6 @@ void trap_handler(unsigned long scause, unsigned long sepc, struct pt_regs *regs
         printk("Store/AMO access fault\n");
         break;
     case 8:
-        // printk("Environment call from U-mode\n");
         u_mode_call_handler(regs);
         break;
     case 9:
@@ -134,20 +143,14 @@ void trap_handler(unsigned long scause, unsigned long sepc, struct pt_regs *regs
     case 12:
         // printk("Instruction page fault\n");
         do_page_fault(regs);
-        // while (1)
-        //     ;
         break;
     case 13:
         // printk("Load page fault\n");
         do_page_fault(regs);
-        // while (1)
-        //     ;
         break;
     case 15:
         // printk("Store/AMO page fault\n");
         do_page_fault(regs);
-        // while (1)
-        //     ;
         break;
     default:
         printk("Unhandled exception\n");

@@ -2,6 +2,7 @@
 #include "stdint.h"
 #include "string.h"
 #include "defs.h"
+#include "proc.h"
 #include "printk.h"
 #include "mm.h"
 
@@ -49,6 +50,30 @@ static int find_empty_process()
     return child_pid;
 }
 
+void copy_vma(pagetable_t child_page_tbl)
+{
+    struct vm_area_struct *vma = NULL;
+    for (uint64_t i = 0; i < current->vma_cnt; i++)
+    {
+        vma = &(current->vmas[i]);
+        // copy those vma that has been allocated
+        if (vma->alloc_flag)
+        {
+            for (uint64_t copy_addr = vma->vm_start; copy_addr < vma->vm_end; copy_addr += PGSIZE)
+            {
+                uint64_t child_page = alloc_page();
+                memcpy((void *)child_page, (void *)PGROUNDDOWN(copy_addr), PGSIZE);
+                create_mapping(
+                    child_page_tbl,
+                    PGROUNDDOWN(copy_addr),
+                    (uint64_t)child_page - PA2VA_OFFSET,
+                    PGSIZE,
+                    vma->vm_flags | 0b10001);
+            }
+        }
+    }
+}
+
 uint64_t sys_clone(struct pt_regs *regs)
 {
     /*
@@ -67,6 +92,7 @@ uint64_t sys_clone(struct pt_regs *regs)
     task[child_pid] = (struct task_struct *)child_addr;
     memcpy((void *)task[child_pid], (void *)current, PGSIZE); // copy parent's PCB to child's PCB
     task[child_pid]->pid = child_pid;
+
     task[child_pid]->thread.ra = (uint64_t)(&__ret_from_fork); // set return adddress to `__ret_from_fork`
 
     uint64_t pt_regs_ofs = (uint64_t)regs - PGROUNDDOWN((uint64_t)regs);
@@ -74,8 +100,8 @@ uint64_t sys_clone(struct pt_regs *regs)
     task[child_pid]->thread.sp = (uint64_t)child_regs;
     task[child_pid]->thread.sscratch = regs->sscratch;
 
-    child_regs->x[10] = 0;                         // child `fork()` return 0
     child_regs->x[2] = task[child_pid]->thread.sp; // child sp should be changed
+    child_regs->x[10] = 0;                         // child `fork()` return 0
     child_regs->sepc = regs->sepc + (uint64_t)0x4; // next instruction after `fork()`
     child_regs->sscratch = regs->sscratch;         // set sscratch
 
@@ -84,7 +110,6 @@ uint64_t sys_clone(struct pt_regs *regs)
      数据复制到其中。
          3.1. 同时将子 task 的 user stack 的地址保存在 thread_info->
          user_sp 中，如果你已经去掉了 thread_info，那么无需执行这一步
-
     */
 
     uint64_t child_stack = alloc_page();
@@ -113,30 +138,13 @@ uint64_t sys_clone(struct pt_regs *regs)
 
     /*
     5. 根据 parent task 的页表和 vma 来分配并拷贝 child task 在用户态会用到的内存
-
-    6. 返回子 task 的 pid
     */
 
-    struct vm_area_struct *vma = NULL;
-    for (uint64_t i = 0; i < current->vma_cnt; i++)
-    {
-        vma = &(current->vmas[i]);
-        // copy those vma that has been allocated
-        if (vma->alloc_flag)
-        {
-            for (uint64_t copy_addr = vma->vm_start; copy_addr < vma->vm_end; copy_addr += PGSIZE)
-            {
-                uint64_t child_page = alloc_page();
-                memcpy((void *)child_page, (void *)PGROUNDDOWN(copy_addr), PGSIZE);
-                create_mapping(
-                    child_page_tbl,
-                    PGROUNDDOWN(copy_addr),
-                    (uint64_t)child_page - PA2VA_OFFSET,
-                    PGSIZE,
-                    vma->vm_flags | 0b10001);
-            }
-        }
-    }
+    copy_vma(child_page_tbl);
+
+    /*
+    6. 返回子 task 的 pid
+    */
 
     printk("\x1b[0;33m[S] New task: %d\x1b[0;37m\n", child_pid);
     return child_pid;

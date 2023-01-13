@@ -2,7 +2,6 @@
 
 #include "stdint.h"
 #include "stddef.h"
-#include "proc.h"
 
 #define SYS_WRITE 64
 #define SYS_GETPID 172
